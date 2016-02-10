@@ -1,0 +1,98 @@
+\documentclass{sig-alternate}
+
+\makeatletter
+ \let\@copyrightspace\relax
+ \makeatother
+
+\begin{document}
+
+\title{L3S at the NTCIR-12 Temporal Information Access (Temporalia-2) Task}
+
+\numberofauthors{3} %  in this sample file, there are a *total* of EIGHT authors.
+\author{
+% You can go ahead and credit any number of authors here,
+% e.g. one 'row of three' or two rows (consisting of one row of three
+% and a second row of one, two or three).
+%
+% The command \alignauthor (no curly braces needed) should
+% precede each author name, affiliation/snail-mail address and
+% e-mail address. Additionally, tag each line of
+% affiliation/address with \affaddr, and tag the
+% e-mail address with \email.
+%
+% 1st. author
+\alignauthor
+Tom A. Cruise\\
+       \affaddr{Leibniz University Hannover}\\
+       \email{toma@cruise.com}
+% 2nd. author
+\alignauthor
+Tom B. Cruise\\
+       \affaddr{Leibniz University Hannover}\\
+       \email{tomb@cruise.com}
+% 3rd. author
+\alignauthor 
+Tom C. Cruise\\
+       \affaddr{Leibniz University Hannover}\\
+       \email{tomc@cruise.com}
+%\and  % use '\and' if you need 'another row' of author names
+}
+% There's nothing stopping you putting the seventh, eighth, etc.
+% author on the opening page (as the 'third row') but we ask,
+% for aesthetic reasons that you place these 'additional authors'
+% in the \additional authors block, viz.
+\additionalauthors{Additional authors: 
+Tom G. Cruise (Disavowed, U.S.A. email: {\texttt{tomg@cruise.com}}) and 
+Tom H. Cruise (Disavowed, U.S.A. email: {\texttt{tomh@cruise.com}}).}
+% Just remember to make sure that the TOTAL number of authors
+% is the number that will appear on the first page PLUS the
+% number that will appear in the \additionalauthors section.
+
+
+\maketitle
+
+\begin{abstract}
+This paper describes our participation in the NTCIR-12 Temporalia-2 task including Temporal Intent Disambiguation (TID) and Temporally Diversified Retrieval (TDR). In the TID subtask we extract linguistic features from the query, time distance features and language modeling of the query n-grams which are then combined using a rule based voting method to estimate a probability distribution over the temporal intents. In the TDR subtask we perform temporal ranking based on two approaches, linear combination of textual and temporal relevance method and learning to rank method. Three classes of features comprising of linguistic, topical and temporal features were used to estimate document relevance in the learning to rank approach.
+
+\end{abstract}
+
+\section*{Team Name}
+L3S
+
+\section*{Subtasks}
+%Climb the Dubai Tower (Chinese)\\
+Temporal Intent Disambiguation Task (English), Temporally Diversified Retrieval Task (English)
+
+\keywords{temporal information retrieval, learning to rank, temporal intent disambiguation, text classification }
+
+\section{Introduction}
+
+The L3S team participated in the Climb the Dubai Tower (CDT) subtask of the NTCIR-12 Impossible Task~\cite{mioverview}.
+This minority report describes our approach to solving the CDT problem and discusses the official results.
+
+\section{Temporal Intent Disambiguation}
+This subtask was related to estimating the probability distribution across four temporal intent classes: past, recency, future and atemporal for a given query~\cite{mioverview}. In this section we describe the approach of how the rule based voting method was used to build the required distribution across the intent classes.
+\subsection{Features extracted for TID}
+\begin{itemize}
+\item \textbf{Time Distance Features}: A temporal mention in a query is an ideal feature to indicate the distance between the intended time in the query and the query submission date. For example, "French Open 2012" becomes a strong indicator of past intent given the query submission date is "May 1, 2013 GMT+0". We use the SUTime Library~\cite{sutime} available part of the Stanford CoreNLP pipeline to recognize and normalize temporal expressions in the queries. A particular date "December 2015" is normalized to "2015-12", a less explicit date such as "Winter 2013" is represented as a season "2013-WI". The distance of the normalized time expressions from the query hitting time is measured to provide an estimate of the intent. It can also identify relative time expressions, such as, "two weeks in the future" which is normalized to "offset P2W". It also recognizes simple temporal words such as "now" and "the future" indicating it as present or future reference respectively, but this leads to false indicators like in the case of "the power of now" or "future shop". 
+\\
+In the dry run queries only 16 out of 100 contained time expressions which could be used to estimate the time distance, this reflects how rare it is to find explicit or implicit temporal expressions in a search query.  
+\item \textbf{Linguistic Features}:
+Verb tense is a strong temporal indicator for search queries. For example, the verb "was" in "When was the first Olympics held" is a strong indicator of "past" intent. We use the Stanford Part-Of-Speech Tagger (POS Tagger) library~\cite{postagger} that recognizes verbs along with the tenses in a search query using the Penn Treebank tag set~\cite{penn}. Verb tenses included in the Penn Treebank set include past tense (VBD), past participle (VBN), present tense (VBP/VBZ), present participle (VBG) and base verb form (VB). Since the Penn Treebank set doesn't include any tags for future tense, we consider a verb (VB) that is preceded by a modal verb (MD) such as will/shall to be an indicator of future tense. A query can include multiple verbs with different tenses. Thus we do a syntactic parsing of the query using the Stanford Parser Library~\cite{parser} to determine the main predicate by selecting the uppermost verb in the parse tree. 
+\item \textbf{Surface Features}:
+ 
+\end{itemize}
+*** Rule Based Voting Method to be described ****
+\subsection{Experimental Setup}
+\section{Temporally Diversified Retrieval}
+\subsection{Experimental Setup}
+\section{Conclusions}
+
+
+\bibliographystyle{abbrv}
+
+\bibliography{ntcirsample}
+
+
+\end{document}
+
