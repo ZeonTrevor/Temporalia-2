@@ -1,5 +1,16 @@
 \documentclass{sig-alternate}
-
+\usepackage{multirow}
+\usepackage{hhline}
+\usepackage{bbm}
+%\usepackage[section]{placeins}
+% \usepackage{hyperref}
+% \hypersetup{
+%     colorlinks=true,
+%     linkcolor=blue,
+%     urlcolor=blue,
+%     citecolor=blue,
+%     pageanchor=false,
+% }
 \makeatletter
  \let\@copyrightspace\relax
  \makeatother
@@ -22,19 +33,19 @@
 %
 % 1st. author
 \alignauthor
-Tom A. Cruise\\
-       \affaddr{Leibniz University Hannover}\\
-       \email{toma@cruise.com}
+Zeon Trevor Fernando\\
+       \affaddr{L3S Research Center, Germany}\\
+       \email{fernando@l3s.de}
 % 2nd. author
 \alignauthor
-Tom B. Cruise\\
-       \affaddr{Leibniz University Hannover}\\
-       \email{tomb@cruise.com}
+Jaspreet Singh\\
+       \affaddr{L3S Research Center, Germany}\\
+       \email{singh@l3s.de}
 % 3rd. author
 \alignauthor 
-Tom C. Cruise\\
-       \affaddr{Leibniz University Hannover}\\
-       \email{tomc@cruise.com}
+Avishek Anand\\
+       \affaddr{L3S Research Center, Germany}\\
+       \email{anand@l3s.de}
 %\and  % use '\and' if you need 'another row' of author names
 }
 % There's nothing stopping you putting the seventh, eighth, etc.
@@ -52,7 +63,7 @@ Tom H. Cruise (Disavowed, U.S.A. email: {\texttt{tomh@cruise.com}}).}
 \maketitle
 
 \begin{abstract}
-This paper describes our participation in the NTCIR-12 Temporalia-2 task including Temporal Intent Disambiguation (TID) and Temporally Diversified Retrieval (TDR). In the TID subtask we extract linguistic features from the query, time distance features and language modeling of the query n-grams which are then combined using a rule based voting method to estimate a probability distribution over the temporal intents. In the TDR subtask we perform temporal ranking based on two approaches, linear combination of textual and temporal relevance method and learning to rank method. Three classes of features comprising of linguistic, topical and temporal features were used to estimate document relevance in the learning to rank approach.
+This paper describes our participation in the NTCIR-12 Temporalia-2 task including Temporal Intent Disambiguation (TID) and Temporally Diversified Retrieval (TDR) subtasks. In the TID subtask, we extract linguistic features from the query, time distance features and multinomial distribution of the query n-grams which are then combined using a rule based voting method to estimate a probability distribution over the temporal intents. In the TDR subtask, we perform temporal ranking based on two approaches, linear combination of textual and temporal relevance method, and learning to rank method. Three classes of features comprising of linguistic, topical and temporal features were used to estimate document relevance in the learning to rank approach.
 
 \end{abstract}
 
@@ -60,120 +71,259 @@ This paper describes our participation in the NTCIR-12 Temporalia-2 task includi
 L3S
 
 \section*{Subtasks}
-%Climb the Dubai Tower (Chinese)\\
 Temporal Intent Disambiguation Task (English), Temporally Diversified Retrieval Task (English)
 
 \keywords{temporal information retrieval, learning to rank, temporal intent disambiguation, text classification }
 
 \section{Introduction}
 
-The L3S team participated in the Temporal Intent Disambiguation (TID) and Temporally Diversified Retrieval (TDR) subtask of the NTCIR-12 Temporalia-2 Task~\cite{mioverview}.
-This minority report describes our approach to solving the CDT problem and discusses the official results.
+Temporal information retrieval (TIR) is a sub-branch of information retrieval comprising of algorithms to improve retrieval effectiveness by leveraging the temporal information in documents and queries~\cite{tir,twaw,tir15}. Previous studies have highlighted that about 1.5\% of queries explicitly mention time expressions~\cite{ecir08}, while about 7\% of web queries have implicit temporal intent~\cite{sigir09}. Thus its important to understand the temporal intent underlying queries. In the \textsf{TID subtask}, we are given a query that can possibly have different temporal intents such as \textit{past}, \textit{recent}, \textit{future} or \textit{atemporal}. We have to determine the right temporal intents for this query by estimating a distribution across the above temporal intents. For example, the query ``history of rap'' clearly indicates a \textit{past} intent. The temporal intent disambiguation of queries is then useful while searching in longitudinal document collections by selecting the appropriate temporal retrieval methods~\cite{ecir10,ecdl10,cikm03}. In the \textsf{TDR subtask}, we focus on this aspect where given a topic we have to produce a ranked list of documents that are diverse across all of the above defined temporal intents. We have to also produce ranked lists of documents for each individual temporal intent for a given topic description. For a more detailed overview of the subtasks of NTCIR-12 Temporalia-2 task please refer to~\cite{mioverview}.
 
-\section{Temporal Intent Disambiguation}
-This subtask was related to estimating the probability distribution across four temporal intent classes: past, recency, future and atemporal for a given query~\cite{mioverview}. In this section we first describe the features extracted from the queries and then the approach of how the rule based voting method was used to build the required distribution across the intent classes.
-\subsection{Features extracted for TID}
+In the TID subtask, we identify a set of query features to disambiguate the temporal intent of a query such as verb tense of the query, distance between the temporal expression identified from the query and the query hitting time, and modeling the frequently occuring n-grams for each temporal intent using a multinomial distribution. %the multinomial distribution of n-grams of the query.
+ We mine these features from the query and combine them using rules that if satisfied contribute a vote to the respective temporal intent. After applying all the rules, the votes are then aggregated and normalized to determine the distribution across the temporal intents.
+
+In the TDR subtask, our approach first produces ranked lists for each of the temporal intents which are then used as candidates to produce the diversified ranked list. Each given topic also contains subtopics that need to be classified to the correct temporal intent. So we first classify the subtopics by jointly classifying all the intents together in order to get unique subtopic-intent pairs (Section \ref{subtopic_classify}). Using the classified subtopics we produce individual ranked lists for each temporal intent using a \textit{listwise} learning to rank approach. The features used for the approach are extracted from the document which includes a temporal relevance score that estimates the expected distance of the document from the query hitting time using the distribution of time expressions in the content (Section \ref{temp_score}). We combine the individual ranked lists of each temporal intent using the earth mover's distance between the distribution of time references in the documents to produce the diversified ranked list.
+
+\textbf{Outline.} The rest of the paper is organized as follows. In Section \ref{TID} we describe the features extracted and the rule based voting approach for the TID subtask. Section \ref{TDR} describes how temporal relevance of a document is computed along with the various \textsf{learning-to-rank} features that are used for the TDR subtask. This section also describes the diversification of results across time. Finally we conclude in Section \ref{Conclusion}.
+\section{Temporal Intent Disambiguation}\label{TID}
+In the TID subtask, given a query (q) and query submission date ($t_{q}$) we have to estimate a distribution across four temporal intent classes (\textit{atemporal, past, recent, future}). Thus to estimate this distribution, we use a rule based voting method that comprises of rules designed from the dry run queries. The rules use various features extracted from the query such as verb tense, distance between the date in the query and query issue time and the multinomial distribution of the n-grams extracted from the queries. In this section, we first describe how the features are extracted from the queries and then the approach of how the rule based voting method is used to build the required distribution across the temporal classes.
+\subsection{Features extracted for TID}\label{sec:tid features}
 \begin{itemize}
-\item\textbf{Time Distance Features}: A temporal mention in a query is an ideal feature to indicate the distance between the intended time in the query and the query submission date. For example, "French Open 2012" becomes a strong indicator of past intent given the query submission date is "May 1, 2013 GMT+0". We use the SUTime Library~\cite{sutime} available part of the Stanford CoreNLP pipeline to recognize and normalize temporal expressions in the queries. A particular date "December 2015" is normalized to "2015-12", a less explicit date such as "Winter 2013" is represented as a season "2013-WI". The distance of the normalized time expressions from the query hitting time is measured to provide an estimate of the intent. It can also identify relative time expressions, such as, "two weeks in the future" which is normalized to "offset P2W". It also recognizes simple temporal words such as "now" and "the future" indicating it as present or future reference respectively, but this leads to false indicators like in the case of "the power of now" or "future shop". 
-\\
-In the dry run queries only 16 out of 100 contained time expressions which could be used to estimate the time distance, this reflects how rare it is to find explicit or implicit temporal expressions in a search query. Thus in order to obtain more candidate temporal expressions for the formal and dry run queries, we used the freely accessible GTE\footnote{http://www.ccc.ipt.pt/~ricardo/software.html} web service detailed in \cite{gte}. Given a query, the GTE web service returns a set of candidate years extracted from the top k web snippets returned by the Bing Search Api.  
+\item\textbf{Time Distance Features}: A temporal mention in a query is a good feature to help disambiguate the temporal intent of a query. For example, ``French Open 2012'' becomes a strong indicator of past intent given that $t_{q}$ is ``May 1, 2013 GMT+0''. We use the SUTime Library~\cite{sutime} available part of the Stanford CoreNLP pipeline to recognize and normalize temporal expressions in the queries.
+%A particular date ``December 2015'' is normalized to ``2015-12'', a less explicit date such as ``Winter 2013'' is represented as a season ``2013-WI''.
+%It can also identify relative time expressions, such as, ``two weeks in the future'' which is normalized to ``offset P2W''. Simple temporal words such as ``now'' and ``the future'' are indicated as present or future reference respectively, but this leads to false indicators like in the case of ``the power of now'' or ``future shop''.
+The distance of the normalized time expressions from the query hitting time is measured to provide an estimate of the intent.
+
+In the dry run queries only 16 out of 100 contained time expressions that can be used to estimate the time distance, this reflects how rare it is to find explicit or implicit temporal expressions in a search query. Thus in order to obtain more candidate temporal expressions for the formal and dry run queries, we used the freely accessible GTE\footnote{http://www.ccc.ipt.pt/~ricardo/software.html} web service detailed in \cite{gte}. Given a query, the GTE web service returns a set of candidate years extracted from the \textit{top 50 web snippets} returned by the Bing Search API.  
 \item\textbf{Linguistic Features}:
-Verb tense is a strong temporal indicator for search queries. For example, the verb "was" in "When was the first Olympics held" is a strong indicator of "past" intent. We use the Stanford Part-Of-Speech Tagger (POS Tagger) library~\cite{postagger} that recognizes verbs along with the tenses in a search query using the Penn Treebank tag set~\cite{penn}. Verb tenses included in the Penn Treebank set include past tense (VBD), past participle (VBN), present tense (VBP/VBZ), present participle (VBG) and base verb form (VB). Since the Penn Treebank set doesn't include any tags for future tense, we consider a verb (VB) that is preceded by a modal verb (MD) such as will/shall to be an indicator of future tense. A query can include multiple verbs with different tenses. Thus we do a syntactic parsing of the query using the Stanford Parser Library~\cite{parser} to determine the main predicate by selecting the uppermost verb in the parse tree. 
+Verb tense is a strong temporal indicator for search queries~\cite{tuta}. For example, the verb ``was'' in ``When was the first Olympics held'' is a strong indicator of past intent. We use the Stanford Part-of-Speech Tagger library~\cite{postagger} that recognizes verbs along with the tenses in a search query using the Penn Treebank tag set. Verb tenses included in the Penn Treebank set include past tense, past participle, present tense, present participle and base verb form. Since the Penn Treebank set doesn't include any tags for future tense, we consider a base verb that is preceded by a modal verb such as will/shall to be an indicator of future tense. A query can include multiple verbs with different tenses. Thus we do a syntactic parsing of the query using the Stanford Parser Library~\cite{parser} to determine the main predicate, by selecting the uppermost verb in the parse tree. 
 \item\textbf{NGram Features}:
-As a set of baseline features, we extract the unigram and bigram terms of the queries from the training data, which is 73 dry run queries. We model the per class multinomial distribution of the \textit{ngrams} by using the ngrams overall frequency (\textit{ngTotCount}) and the per class ngram count (\textit{ngClassCount}). The per class ngram count is computed by counting the ngrams per class (like past) generated from those queries which had a past probability > 0.0 in the training data.
+As a set of baseline features, we extract the uni-gram and bi-gram terms of the queries from the training data, which is 73 dry run queries. We model the per class multinomial distribution of the \textit{n-grams} by using the n-grams overall frequency (\textit{T}) and the per class n-gram count (\textit{C}). The per class n-gram count is computed by counting the n-grams per class (like past) generated from those queries which have a non-zero past probability in the training data.
 \begin{equation}\label{eq:1}
-p(ng, class) = \frac{ngClassCount}{ngTotCount}
+p(ng, class) = \frac{C}{T}
 \end{equation}
-Each formal run query (\textit{Q}) is representated as a set of all possible permutations of the unigram and bigram terms that are extracted from the query. Then the probability distribution of a query across the temporal classes is calculated using the following equation.
+Each formal run query (\textit{q}) is representated as a set of all possible permutations of the uni-gram and bi-gram terms that are extracted from the query. Then the probability distribution of a query across the temporal classes is calculated using the following equation.
 \begin{equation}\label{eq:2}
-p(Q,class) =\underset{q\in Q}{\arg\max}(\prod_{ng \in q}p(ng, class))
+p(q,class) =\underset{i\in q}{\arg\max}\prod_{ng \in i}p(ng, class)
 \end{equation}
 \end{itemize}
-*** Rule Based Voting Method to be described ****
+\subsection{Rule Based Voting Method}
+We designed rules based on the dry run queries, which if satisfied contributes a vote to a particular temporal class. Once all the rules are applied, the votes are accumulated for each temporal class and a probability distribution across the temporal classes are built using these votes. We apply the rules in the same order as defined below.
+\begin{itemize}
+\item \textsf{NGram features} provides the probability of a query to a particular temporal class. We learn a model using a decision tree based on regression for the dry run queries with the NGram features. This learned model is then used to predict the probabilites for the formal run queries. The temporal class with the maximum probability output from the learned model gets a vote.
+\item From the \textsf{verb tense features}, if the tense of a query is either past, present or future, a vote is assigned to that respective temporal class~\cite{hitsz}. If no tense information can be extracted from the query, a vote is assigned to the atemporal class.
+\item If the \textsf{temporal mention} extracted from the query contains the words (\textit{``past\_ref'', ``present\_ref'' or ``future\_ref''}), a vote gets assigned to that temporal class. If the temporal mention is a date and if its earlier or after the query hitting time, a vote gets assigned to past and future class respectively.
+\item If after applying the above rules, the votes across all the temporal classes are low and their standard deviation is low. We then take the mean of the candidate years extracted for the query from the \textsf{GTE service}. If the difference between the mean and the query hitting time is about 1 year in the past, we give a vote to recent. If the difference is more than 2 years, a vote is assigned to the past. If the mean date is after the query hitting date, a vote is given to future. If there are no candidate years, atemporal gets a vote.
+\end{itemize}
 \subsection{Experiments}
 \subsubsection{Temporal Intent Disambiguation Runs}
+We submitted 2 runs for the TID subtask.
+\begin{itemize}
+\item \textsf{L3S-TID-E-1}: This run uses the \textsf{rule based voting method} to generate the probability distribution across the temporal classes for a given query.
+\item \textsf{L3S-TID-E-2}: This run uses the probability distribution across temporal classes for a query generated only from the \textsf{NGram features}.
+\end{itemize}
 \subsubsection{Results and Discussion}
-\section{Temporally Diversified Retrieval}
-This subtask requires a set of relevant documents to be retrieved for each temporal intent class (past, present, future and atemporal) plus a diversified set which is diverse across the above temporal classes for a given topic. Documents provide temporal information in two forms, publication date and temporal expressions in the content. In this section we first describe the preliminaries required to compute the temporal relevance score of a document using the temporal expressions in the content. We then shortly describe how this temporal relevance score is combined with the topical relevance score in a parameterized sum. Then we focus on the features extracted from the document that will be used in learning-to-rank approaches to build different ranking models for each temporal intent. Finally we describe the approach for producing the diversified set of documents across all temporal intents that uses the set of documents considered relevant for each temporal intent as candidates. 
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+Run & Average Absolute Loss & Cosine Similarity \\
+\hline
+\hline
+L3S-TID-E-1 & \textbf{0.2031} & \textbf{0.7307} \\
+\hline
+L3S-TID-E-2 & 0.2452 & 0.6673 \\
+\hline
+\end{tabular}  
+\caption{Evaluation Results of TID Formal Runs}
+\label{table:1}
+\end{table}
+The evaluation results in \textsf{table \ref{table:1}}, show that the \textsf{rule based voting} method does better than the baseline of using only \textsf{NGram features} across both performance measures. This highlights how the \textsf{linguistic} and \textsf{time distance} features helps improve the estimation of the temporal intent of a query. Our method helps determine the correct distribution for queries that contain linguistic information such as \textit{``what was the great awakening''} and \textit{``when did elvis die''}. However, for queries that have an implicit/explicit temporal expression identified, such as, \textit{``uk 2009 balance of payments''} or \textit{``John Galliano Spring 2011 Mens Preview''} the probabilities are spread across all temporal classes with higher probability for the past intent. This happens since we aggregate the votes for time distance only after accumulating the votes for NGram and linguistic features. Consequently this increases the average absolute loss because these type of queries clearly indicate a particular temporal intent, thus for queries that contain temporal expressions only the time distance rule should be applied. 
+
+Using a rule, based on dictionary words such as \textit{``future'', ``schedule'', ``releases'', ``forecast'', ``plan''} could help estimate queries that have higher probability of future intent. Certain queries indicating future intent were misclassified as past intent because of the ambiguity introduced by the temporal tagger. For example, \textit{``November Calendar printable''} and \textit{``December calendar''} were resolved to ``2012-11'', ``2012-12'' respectively. 
+
+The probability for atemporal queries like \textit{``causes of global warming'', ``light pollution'', ``literature critics''}, were easily estimated as all the features contributed votes to atemporal intent and also no candidate years were returned by the \textsf{GTE service} indicating atemporal nature. However, for atemporal queries like \textit{``consumer economy'', ``sherlock holmes''}, the distance of the mean of the candidate years returned by \textsf{GTE service} indicates past, which causes a misclassification. Thus we should re-design the rule to also consider the spread of candidate years across time to understand the atemporal intent. Also the candidate years returned by the \textsf{GTE service} is based on search results returned in December 2015, which won't be optimal for queries with issuing time of 2013.
+
+Queries like \textit{``how long does the flu last'', ``the advantages of hosting the olympic games''} are considered to be either past or recent using the \textsf{NGram} and \textsf{linguistic} features, in these cases we need additional rules to help disambiguate the atemporal intent. 
+
+\section{Temporally Diversified Retrieval}\label{TDR}
+In the TDR subtask, we are given a topic, description and an indicative search question (subtopic) for each temporal class and we have to retrieve a set of relevant documents for each of these classes. We also have to return a set of documents that are temporally diverse for the same topic. Since the subtopic class information was not supposed to be used, we use a classifier to jointly classify the subtopics to the respective intents based on verb tense and dictionary features detailed in Section \ref{subtopic_classify}. Once we have a classified subtopic, we use it for retrieval which is based on a \textsf{learning-to-rank} approach using features extracted from verb tenses of sentences in documents, topical similarity of the document, textual relevance returned by statistical language model and temporal features based on the distribution of time references in the document with intent specific filters.
+
+Documents provide temporal information in two forms, publication date and temporal expressions in the content. Thus in Section \ref{temp_score}, we describe how to compute the temporal relevance score of a document using the temporal expressions in the content. We then shortly describe in Section \ref{linear_comb}, how this temporal relevance score is combined with the topical relevance score in a parameterized sum. Next, we focus on the features extracted from the document that are used in learning-to-rank approaches to build different ranking models for each temporal intent (Section \ref{ltor_f}). Finally, we describe in Section \ref{diversification} the approach for producing the diversified set of documents across all temporal intents that uses the set of documents considered relevant for each temporal intent as candidates. 
 \subsection{Subtopic Classification}\label{subtopic_classify}
-For each search topic, the workload also contains subtopics which are indicative search questions for each of the temporal classes. As we can't use the class information provided for each subtopic, we used a multiclass SVM classifier\footnote{https://www.cs.cornell.edu/people/tj/svm\_light/} to classify subtopics using the features extracted from it.
+For each search topic, the workload also contains subtopics which are indicative search questions for each of the temporal classes. We use a multiclass SVM classifier\footnote{https://www.cs.cornell.edu/people/tj/svm\_light/} to classify subtopics using the features extracted from it. Using this classifier there is a likelihood that subtopics belonging to the same topic will be classified to the same temporal intent. Thus we use the confidence score returned from the SVM classifier to jointly classify the subtopics for a given topic together using a greedy approach.
+
+In this approach we first pick the subtopic-intent pair that has the maximum confidence score, and then ignore the confidence scores of this intent for the remaining of the subtopics. Then we pick the next highest confidence score pair from the remaining set and proceed as above to determine all unique subtopic-intent pairs.
+
+The features that are used for the multiclass classifier are listed below.
 \begin{itemize}
-\item We extract the tense of the subtopic similar to the approach used for the TID subtask. 
+\item We extract the tense of the subtopic similar to the approach described in section \ref{sec:tid features} which is used for the TID subtask. 
 %The only difference is that if the tense of the root verb is different from the tense of the following verb we choose the tense of the last verb in the subtopic to be its tense.
-\item We identified certain words from the dry run queries which were very common for certain temporal intents and built a word dictionary. We also included synonyms of the above identified words and the classes as well.
-\begin{itemize}
-\item Future: future, forecast, will, would, should, shall, next, expected, soon, projected, possibility, scheduled
-\item Past: past, history, were, origin, did, been, previous, earlier, former, historical
-\item Recent: recent, present, current, latest, recently, trendy, now, today
+\item We identified certain words from the dry run queries which were frequently occurring for certain temporal intents and built a word dictionary. We also included synonyms of the above identified words and the class names as well.
+% \begin{itemize}
+% \item Future: future, forecast, will, would, should, shall, next, expected, soon, projected, possibility, scheduled
+% \item Past: past, history, were, origin, did, been, previous, earlier, former, historical
+% \item Recent: recent, present, current, latest, recently, trendy, now, today
+% \end{itemize}
+\item We compute the average expected distance (section \ref{temp_score}) for the subtopic from the top 20 pseudo relevant documents that were retrieved. 
 \end{itemize}
-\item We compute the average expected distance (\ref{temp_score}) for the subtopic from the top 20 pseudo relevant documents that were retrieved. 
-\end{itemize}
-The multiclass SVM classifier sometimes classifies two subtopics belonging to the same topic to be of the same temporal intent, which is not ideal. So we use the confidence score returned from the SVM classifier to carry out a joint classification where each subtopic will have a unique intent. We take all possible combinations of unique (subtopic, intent) pairs and select the combination that gives the maximum confidence.
 \subsection{Temporal Relevance Score of Document} \label{temp_score}
-Given a document and a topic, we have to determine the relevance of the document to each of the temporal intents along with the topical relevance. Each document in the corpus was annotated with normalized time expressions ($TE(d)$)~\cite{collection}. We then map each time expression \textit{te} in the document \textit{d} to a time interval [$b,e$] at day granularity(e.g., May 2014 is mapped to [01/05/2014, 31/05/2014]). We find the temporal distribution of time references in a document at month granularity, thus each document $d$ is represented by a set $TE_{m}(d)$ of monthly time intervals [$t_{mb},t_{me}$]. The weight of each monthly time interval is calculated as follows
+The temporal relevance estimates the expected distance of a document in time, that is, the focus time using the temporal distribution of time expressions in the content. Thus in this section, we describe how we compute this temporal relevance using the annotated normalized time expressions $\tau(d)$. We map each time expression \textit{$t_{e}$} in the document \textit{d} to a time interval [$b,e$) at day granularity (e.g., May 2014 is mapped to [01/05/2014, 31/05/2014]). Then we determine the temporal distribution of time references in a document at month granularity, that is, each document $d$ is represented by a set $\tau_{m}(d)$ of monthly time intervals [$t_{mb},t_{me}$). The weight of each monthly time interval is calculated as follows
 \begin{equation}\label{eq:3}
-\resizebox{0.95\hsize}{!}{$w([t_{mb},t_{me}]) =\sum\limits_{te \in TE(d)} \begin{cases}               
-               \frac{te_{count}}{|TE(d)|}, & te \in [t_{mb},t_{me}]\\
-               \frac{te_{count}}{|TE(d)|} * \frac{1}{12}, & te \in \{t_{year}\} \& [t_{mb},t_{me}] \in te
-            \end{cases}$}
+\resizebox{0.98\hsize}{!}{$
+              w([t_{mb},t_{me})) =\sum\limits_{t_{e} \in \tau(d)} \begin{cases}               
+               \frac{cnt(t_{e})}{|\tau(d)|}, & t_{e} \in [t_{mb},t_{me})\\\\
+               \frac{cnt(t_{e})}{|\tau(d)|} \cdot g, &  [t_{mb},t_{me}) \in t_{e} \in \{t_{g}\}
+            \end{cases}
+            $}
 \end{equation}
-where $te_{count}$ is the count of the number of occurences of a $te$ in the document. The constant $t_{year}$ is used to describe if a time interval is at a year granularity. 
-For intent specific filters (recency, past, future) we use an exponential distribution to model it as follows
+where $cnt(t_{e})$ is the count of the number of occurrences of $t_{e}$ in the document. The constant $t_{g}$ is used to describe if a time interval is at a year granularity and the constant $g$ is the weight contributed by this temporal expression to the time interval [$t_{mb},t_{me}$)(i.e.$\frac{1}{12}$).
+
+The intent specific filter ($\mathcal I$) for recency ($\mathcal R$), past ($\mathcal P$) or future ($\mathcal R$) are chosen based on the subtopic classification. It is modeled as an exponential distribution using $dist$ as the distance between query issue time and time expression measured in months ($t_{q} - t_{e}$):
 \begin{equation}\label{eq:4}
-f(te) = \begin{cases}
-			\lambda * e^{-\lambda * |T_{q} - te|}, & \lambda \in [0,1],\ recency\\
-			\lambda * e^{\lambda * |T_{q} - te|}, & \lambda \in [0,1],\ past \ or \ future
-		\end{cases}
+f(t_{e}) = \begin{cases}
+                     \lambda e^{-\lambda |dist|} \cdot \mathbbm{1}(dist \geq 0), & if\ \mathcal I = \mathcal R\\
+                     \lambda e^{\lambda |dist|} \cdot \mathbbm{1}(dist > 0), & if\ \mathcal I = \mathcal P\\
+                     \lambda e^{\lambda |dist|} \cdot \mathbbm{1}(dist < 0), & if\ \mathcal I = \mathcal F
+              \end{cases}
 \end{equation}
-where $T_{q}$ is the query hitting time and $\lambda$ is a tunable parameter which we set to 0.03 in our experiments. The distance between the query hitting time and time expression is measured in months. We use these intent specific filters to transform the temporal distribution of time references in a document. Then the expected distance of the document with respect to the query hitting time, i.e., temporal relevance score is computed as follows
+where $\mathbbm{1}(dist \geq 0)$ is an indicator function whose value assumes 1 iff $dist \geq 0$. $\lambda$ is a tunable parameter, which is set to 0.03 in our experiments. The intuition behind this approach is that temporal expressions close to $t_{q}$ have a higher probability than older temporal expressions for the recency filter. While for the past and future filter, temporal expressions further away from $t_{q}$ have a higher probabilty. 
+
+We then use the chosen intent specific filter to transform the temporal distribution of time references in a document.
 \begin{equation}\label{eq:5}
-\resizebox{0.95\hsize}{!}{$E(d) = \tfrac{1}{|TE_{m}(d)|}\sum\limits_{te \in TE_{m}(d)}\begin{cases}
-													w(te) * f(te) * |T_{q} - te|, & past\ \&\ future\\
-													w(te) * f(te) * \frac{1}{|T_{q} - te|}, & recency
-												\end{cases}$}
+h(t_{e}) = \begin{cases}
+              w(t_{e}) \cdot f(t_{e}) \cdot |dist|, & if\ \mathcal I\ = \mathcal P\ or\ \mathcal F\\
+              w(t_{e}) \cdot f(t_{e}) \cdot \frac{1}{|dist|}, & if\ \mathcal I\ = \mathcal R
+           \end{cases}
+\end{equation}
+So the expected distance of the document with respect to the query hitting time, i.e., temporal relevance score is computed as follows
+
+\begin{equation}\label{eq:6}
+       E(d) = \tfrac{1}{|\tau_{m}(d)|}\sum\limits_{t_{e} \in \tau_{m}(d)}h(t_{e})
 \end{equation}
 \subsection{Parameterized Sum Method}\label{linear_comb}
- For all our experiments, we determine a set \textit{R} of pseudo-relevant documents (|\textit{R}|=1000) by employing a unigram language model with Dirichlet smoothing~\cite{lm} (with $\mu$ = 2000). We then re-rank the documents using scores obtained from the linear combination of the temporal relevance and topical relevance score, defined as follows
- \begin{equation}\label{eq:6}
- R = \lambda E(d) + (1 - \lambda) R_{c}, \ \ 0 \leq \lambda \leq 1
+ For all our experiments, we determine a set \textit{R} of pseudo-relevant documents (|\textit{R}|=1000) by employing a unigram language model with Dirichlet smoothing ($\mu$ = 2000)~\cite{lm}. We then re-rank the documents using scores obtained from the linear combination of the temporal relevance and topical relevance score, defined as follows
+ \begin{equation}\label{eq:7}
+ R_{f} = \lambda E(d) + (1 - \lambda) R_{c}, \ \ 0 \leq \lambda \leq 1
  \end{equation}
-where $\lambda$ can be used to determine if we want to give more weightage to temporal relevance or topical relevance score.
+where $\lambda$ is a tunable parameter and $R_{c}$ is the relevance score of the language model.
 \subsection{Learning-To-Rank Features}\label{ltor_f}
 In learning-to-rank approaches a ranking model is built by training a set of query-document pairs using a learning algorithm. The learned model is a weighted coefficient $w$ of a feature vector $x$, which can then be used rank unseen query-document pairs. For a detailed description of the different approaches, refer to~\cite{ltor}. Feature selection is critical for learning-to-rank approaches, so in this section we describe the various features that we extract from the query-document pairs.
 \begin{itemize}
-\item\textbf{Verb Tense Features}: We take the noun terms of the search query into consideration and split the document into two sentence types: $se_{noun}$ those sentences that contain atleast a noun search term and $se_{non-noun}$ those that don't contain any noun search term. We determine if a sentence talks about the past, present or future by using the same approach as the linguistic feature for TID subtask. We thus get 6 verb tense features: the ratio of past, present and future tense w.r.t $se_{noun}$, and ratio of past, present and future tense w.r.t $se_{non-noun}$. These features help determine the language of the document, how much of the text talks about the past, present or future which in turn helps match it to a particular temporal intent. 
-\item\textbf{Topical Features}: These features include similarity features based on the jaccard similarity measure. We compute the similarity between search topic and document title, search topic and document content, search subtopic and document title, search subtopic and document content. These features help determine the topical similarity between the document and search topic and subtopic. We also use the topical relevance score between the search query and the document as a feature. The relevance score obtained from the unigram language model with Dirichlet smoothing is directly used. 
-\item\textbf{Temporal Features}: This feature directly uses the temporal relevance score computed for a document as described in \ref{temp_score}. It helps determine documents that are relevant to past, recent and future temporal intents. We also include temporal density feature which is the ratio of the number of temporal expressions to the length of the document. This helps differentiate between atemporal and temporal documents. 
+\item\textbf{Verb Tense Features}: We take the noun terms of the search query into consideration and split the document into two sentence types: $\mathcal S_{noun}$ those sentences that contain atleast a noun search term and $\mathcal S_{non-noun}$ those that don't contain any noun search term. We determine if a sentence talks about the past, present or future by using the same approach as the linguistic feature for TID subtask. We thus have \textsf{6 verb tense features}: 
+\begin{itemize}
+\item the ratio of past, present and future tense w.r.t $\mathcal S_{noun}$,
+\item the ratio of past, present and future tense w.r.t $\mathcal S_{non-noun}$. 
 \end{itemize}
-\subsection{Earth Mover's Distance for Diversification}
-The earth mover's distance ($EMD$) is a measure of distance between two probability distributions, it is the minimum cost required to transform one probability distribution to the other. In our case we would measure the $EMD$ between the temporal distribution of time references from one document to another. We consider sets $R_{i}$ containing candidate documents from the top 100 documents retrieved for the specific intent ($i \in$ \{atemporal, recency, past, future\}) using the above ranking approaches. We represent the diversified set of results as $DR$, to which we add documents from sets $R_{i}$ which have maximum $EMD$ from the documents already present in $DR$. During the initial step we add $rank\ 1$ document from one of the sets $R_{i}$ at random, then we compute the $EMD$ between two temporal distributions $A$ and $B$ as follows
-\begin{equation}\label{eq:7}
+These features help determine the language of the document, how much of the text talks about the past, present or future which in turn helps match it to a particular temporal intent. 
+\item\textbf{Topical Features}: These include \textsf{4 similarity based features} using the jaccard similarity measure between:
+   \begin{itemize}
+       \item search topic and document title,
+       \item search topic and document content,
+       \item search subtopic and document title, 
+       \item search subtopic and document content. 
+   \end{itemize}
+These features help determine the topical similarity between the document, search topic and subtopic. We also use the \textsf{document relevance score} between the search query and the document as a feature. The relevance score obtained from the unigram language model with Dirichlet smoothing is directly used. 
+\item\textbf{Temporal Features}: These include $two$ features based on the temporal expressions of the document.
+       \begin{itemize}
+       \item \textsf{temporal relevance score} computed for a document as described in \ref{temp_score}.
+       \item \textsf{temporal density feature} which is the ratio of the number of temporal expressions to the length of the document. This helps differentiate between atemporal and temporal documents. 
+       \end{itemize}
+\end{itemize}
+\subsection{Earth Mover's Distance for Diversification}\label{diversification}
+The earth mover's distance ($\mathcal E$) is a measure of distance between two probability distributions, it is the minimum cost required to transform one probability distribution to another. In our case, we measure the $\mathcal E$ between the temporal distribution of time references from one document to another.  We use $\mathcal E$ for diversification, so that we get a set of documents that have diverse temporal distributions which would in turn give a temporally diversified set. We consider sets $R_{i}$ containing candidate documents from the top 100 documents retrieved for the specific intent ($i \in$ \{$\mathcal A$, $\mathcal R$, $\mathcal P$, $\mathcal F$\}) using the above ranking approaches. We represent the diversified set of results as $R_{D}$, to which we add documents from sets $R_{i}$ that have maximum $\mathcal E$ from the documents already present in $R_{D}$. During the initial step, we add a $rank\ 1$ document from one of the sets $R_{i}$ at random and initialize $\mathcal E_{0}$ with a zero value. Then we compute the $\mathcal E$ between two temporal distributions $A$ and $B$ as follows
+\begin{equation}\label{eq:8}
 	\begin{aligned}
-		EMD_{0} &= 0.0  \\
-		EMD_{i+1} &= (w_{A}(te_{i}) + EMD_{i}) + w_{B}(te_{i}) \\
-		TotalEMD &= \sum\limits_{i=1}^{|TE_{m}(A) \cup TE_{m}(B)|}EMD_{i}
+		\mathcal E_{i+1} &= (w_{A}(te_{i}) + \mathcal E_{i}) - w_{B}(te_{i}) \\
+		\mathcal E_{Total} &= \sum\limits_{i=1}^{|\tau_{m}(A) \cup \tau_{m}(B)|}|\mathcal E_{i}|
 	\end{aligned}
 \end{equation}
-
+We give preference to top ranked documents to be added to $R_{D}$ by discounting the $\mathcal E_{Total}$ using the rank of the document, so the final score that we consider is
+\begin{equation}\label{eq:9}
+       \mathcal E_{f} = \frac{1}{rank} * \mathcal E_{Total}
+\end{equation}
 \subsection{Experimental Setup}
-We used Lucene\footnote{https://lucene.apache.org/core/} to build the index for the "LivingKnowledge news and blogs annotated subcollection" corpus~\cite{mioverview}. We use the unigram language model with Dirichlet smoothing implementation of lucene to retrieve the top 1000 pseudo-relevant documents. The query is constructed from the title of the topic and the subtopic, and then searched against the title and content fields of the documents. The features in \ref{ltor_f} are extracted from the tagged version of a pseudo-relevant document.
-\\
-The 10 dry run topics and the 50 formal run topics of last year along with their $qrels$\footnote{http://research.nii.ac.jp/ntcir/permission/ntcir-11/perm-en-Temporalia.html} are used to generate the training data for learning the ranking models. Each row in the training data is a query-document pair: the first column is the relevance judgement, the second is query id (qid) used to restrict the generation of constraints, the subsequent columns are feature/value pairs ordered by increasing feature number. We created separate training data for each temporal class (\textit{past, recency, future} and $atemporal$), the data is prepared as follows: for each subtopic of a given topic we retrieve using the query (containing topic and subtopic), the top-1000 pseudo relevant documents using a language model (LM). The relevance judgements in the $qrels$ are of the order 2 (\textit{really relevant}), 1 ($relevant$) and 0 ($irrelevant$). From the pseudo relevant documents, we select relevant and irrelevant documents in the ratio 1:2 for preparing the training data for a particular temporal class. Each temporal class-specific training data is then used to learning a ranking model so as to predict document ranking for a formal-run subtopic of the same temporal class. Besides, we also experimented by combining all the class-specific training data into one large training set, but the performance of the results were lower than the class-specific training data. We use RankLib\footnote{https://sourceforge.net/p/lemur/wiki/RankLib/} library to compare different \textit{listwise} learning to rank approaches such as AdaRank~\cite{adarank}, RankBoost~\cite{rankboost} and LambdaMART~\cite{lambdamart}. We use the default learning algorithm specific parameters and optimize for the measure $NDCG@20$. For the final runs we use the AdaRank learning algorithm.
+We used Lucene\footnote{https://lucene.apache.org/core/} to build the index for the ``LivingKnowledge news and blogs annotated subcollection'' corpus~\cite{mioverview}. The unigram language model with Dirichlet smoothing implementation of Lucene was used to retrieve the top 1000 pseudo-relevant documents. The query is constructed from the title of the topic and the subtopic, and then searched against the title and content fields of the documents. The features described in section \ref{ltor_f} are extracted from the tagged version of a pseudo-relevant document.
+
+\textbf{Training data}. The 10 dry run topics and the 50 formal run topics of Temporalia-1 along with their $qrels$\footnote{http://research.nii.ac.jp/ntcir/permission/ntcir-11/perm-en-Temporalia.html} are used to generate the training data for learning the ranking models. Each row in the training data is a query-document pair: the first column is the relevance judgement, the second is query id (qid) used to restrict the generation of constraints, the subsequent columns are feature/value pairs ordered by increasing feature number. We created separate training datasets for each temporal class (\textit{past, recent, future, atemporal}), the data is prepared as follows: the query containing topic and subtopic is used to retrieve the top-1000 pseudo relevant documents using a language model (LM). The relevance judgements in the $qrels$ are of the order 2 (\textit{really relevant}), 1 ($relevant$) and 0 ($irrelevant$). From the pseudo relevant documents, we selected relevant and irrelevant documents in different ratios (1:1, 1:2, 1:3) in order to find the right balance of training examples. Finally we found that the ratio 1:2 (relevant: irrelevant) for preparing the training data performs best. Each temporal class-specific training data is then used to learning a ranking model so as to predict document ranking for a formal-run subtopic of the same temporal class. Besides, we also experimented by combining all the class-specific training data into one large training set, but the performance of the results were lower than the class-specific training data.
+
+\textbf{Ranking Models}. The RankLib\footnote{https://sourceforge.net/p/lemur/wiki/RankLib/} library is used to compare different \textit{listwise} learning to rank approaches, such as, AdaRank~\cite{adarank}, RankBoost~\cite{rankboost} and LambdaMART~\cite{lambdamart}. We used the default learning algorithm specific parameters and optimize for the measure $nDCG@20$. For the final runs, we used the AdaRank learning algorithm.
 \subsubsection{Temporal Diversified Retrieval Runs}
 We submitted 3 runs for the TDR subtask. For all the runs the diversification of the results across all temporal intents is carried out using the earth mover's distance measure.
 \begin{itemize}
-\item \textit{L3S-TDR-E-1}: Manual run with manually crafted queries using the topic and subtopic. The training and test data (formal runs) is generated from the pseudo-relevant documents retrieved using LM. The ranking model is learnt based on the class-specific datasets.
-\item \textit{L3S-TDR-E-2}: Automatic run in which the subtopics are classified using the joint classifier described in \ref{subtopic_classify}. The pseudo relevant documents are retrieved using LM and then reranked using the parameterized sum method (\ref{linear_comb}). The parameter $\lambda$ is set to 0.3, giving more weightage to the textual relevance score.
-\item \textit{L3S-TDR-E-3}: Automatic run in which the subtopics are classified using the joint classifier described in \ref{subtopic_classify}. The training and test data (formal runs) is generated from the pseudo-relevant documents retrieved using LM. The ranking model is learnt based on the class-specific datasets.
+\item \textsf{L3S-TDR-E-1}: Manual run with manually crafted queries using the topic and subtopic. The training and test data (formal runs) is generated from the pseudo-relevant documents retrieved using LM. The ranking model is learnt based on the class-specific datasets.
+\item \textsf{L3S-TDR-E-2}: Automatic run in which the subtopics are classified using the joint classifier described in \ref{subtopic_classify}. The pseudo relevant documents are retrieved using LM and then re-ranked using the parameterized sum method (\ref{linear_comb}). The parameter $\lambda$ is set to 0.3, giving more weightage to the textual relevance score.
+\item \textsf{L3S-TDR-E-3}: Automatic run in which the subtopics are classified using the joint classifier described in \ref{subtopic_classify}. The training and test data (formal runs) is generated from the pseudo-relevant documents retrieved using LM. The ranking model is learnt based on the class-specific datasets.
+\item \textsf{L3S-TDR-E-4}: An unofficial baseline, this run mainly relies on the retrieved documents using LM.
 \end{itemize}
 \subsubsection{Results and Discussion}
-\section{Conclusions}
 
+\begin{table}[htb]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+Run & D\#-NDCG@20 & I-rec@20 \\
+\hline
+\hline
+L3S-TDR-E-1 & 0.8262 & 0.9850 \\
+\hline
+L3S-TDR-E-2 & 0.6852 & \textbf{0.9900} \\
+\hline
+L3S-TDR-E-3 & \textbf{0.8423} & 0.9850 \\
+\hline
+\end{tabular}  
+\caption{Diversified Results of TDR Formal Runs}
+\label{table:3}
+\end{table}
+\begin{table*}[htb]
+%\centering
+\begin{tabular}{ |c|c|c|c|c|c|c|c|c|c|c| }
+ \hline
+  \multirow{2}{*}{Run} & \multicolumn{5}{|c|}{NDCG@20} & \multicolumn{5}{|c|}{P@20}\\
+  	\hhline{~----------}
+    & Atemporal & Future & Past & Recency & All & Atemporal & Future & Past & Recency & All \\
+    \hline
+ \hline
+ %\multirow{2}{Run} &
+ %\multicolumn{5}{|c|}{NDCG@20} \\
+ %& Atemporal & Future & Past & Recency & All \\
+ %\hline\hline
+ L3S-TDR-E-1 & 0.7264 & 0.6511 & 0.7005 & \textbf{0.7151} & 0.6983 & \textbf{0.7960} & 0.7360 & 0.7710 & \textbf{0.7970} & \textbf{0.7750}\\ 
+ \hline
+ L3S-TDR-E-2 & 0.6109 & 0.6932 & 0.7127 & 0.6758 & 0.6731 & 0.7330 & \textbf{0.7790} & \textbf{0.8000} & 0.7760 & 0.7720\\ 
+ \hline
+ L3S-TDR-E-3 & \textbf{0.7299} & 0.6508 & 0.6998 & 0.7116 & 0.6980 & 0.7960 & 0.7360 & 0.7700 & 0.7930 & 0.7737\\ 
+ \hline
+ L3S-TDR-E-4 & 0.7052 & \textbf{0.7151} & \textbf{0.7297} & 0.6865 & \textbf{0.7076} & 0.7690 & 0.7850 & 0.7940 & 0.7580 & 0.7416\\ 
+ \hline
+\end{tabular}
+\caption{Per-Class results for all TDR Runs. For every temporal class, the highest value is indicated in bold.}
+\label{table:2}
+\end{table*}
 
+The evaluation results in table \ref{table:2} shows that (1) there is no significant difference in overall performance between the manual run (\textsf{L3S-TDR-E-1}) and automatic run with subtopic classification (\textsf{L3S-TDR-E-3}) which indicates that the joint classification approach for subtopic classification performs well. (2) The \textit{nDCG@20} performance for the \textit{atemporal} class is poor for parameterized sum method when compared to the learning-to-rank approach by about 19\%. This shows that the topical features based on similarity measures between topic, subtopic and document title, content along with the temporal density feature helps significantly retrieve more relevant atemporal documents. (3) The \textit{nDCG@20} performance for the \textit{future} intent is higher using parameterized sum method than using learning-to-rank approach by about 7\%, this indicates that using topical features based on similarity measures and verb-tense features have a deterimental effect than only using the temporal relevance score when retrieving documents for future intent. (4) All our models perform better than the baseline in terms of rank insensitive metric \textit{P@20}. However, in terms of \textit{nDCG@20} the performance for \textit{future} and \textit{past} class of the baseline outperforms all our models, indicating the importance of textual relevance in retrieving such documents. Our learning-to-rank models outperforms the baseline in \textit{nDCG@20} for the \textit{atemporal} and \textit{recency} class, highlighting the significance of temporal features such as temporal relevance and temporal density for these classes. 
+
+The overall \textit{ERR} measure is high, indicating that the 1st and 2nd ranked document is relevant for most topics across all runs. The topic ``The right to be forgotten'' performs poorly for \textit{ERR} and \textit{nDCG@20} measures across all subtopics since we apply stopword removal to the topics before forming a query (e.g.``right forgotten''), which when used doesn't retrieve the most relevant documents for this topic highly enough.
+
+The performance of the diversified results is measured using \textit{D\#-nDCG@20} that combines intent recall (\textit{I-rec@20}), and \textit{D-nDCG@20} which is a form of nDCG measure where the gain is replaced with a global gain value that takes into consideration the per intent graded relevance for a document. Our diversification approach performs well across learning to rank runs (table \ref{table:3}), since the intent recall is high across all topics as we consider the top 100 relevant documents returned for each temporal class and since our \textit{nDCG} values are relatively high for the individual temporal classes as well. The earth mover's distance works well in our case since we diversify the candidate documents by selecting those documents that are highly ranked in the individual lists and those that are most diverse in the temporal distribution of the time references. Our method could be improved, if instead of a random selection for selecting the first document, we use a method to choose the most confident document from across the temporal classes. Also, considering only the top 20 relevant documents from each intent could improve the \textit{D\#-nDCG@20} measure.
+%Regarding the d# measure for diversity, it takes a linear combination of Intent recall and D-ndcg. D-ndcg replaces the gain measure of NDCG with a global gain that takes into consideration the per intent graded relevance for a document.
+%\begin{itemize}
+%\item Difference between manual and automatic run with subtopic classification
+%\item atemporal using parameterized sum is poor compared to learning-to-rank by 0.15 or 23\%
+%\item future using parameterized sum is better by 0.06 or 11\%
+%\item Effect of temporal features 
+%\item ERR is high indicating 1st and 2nd document is always relevant
+%\item diversification results 
+%\end{itemize}
+\section{Conclusions}\label{Conclusion}
+In this paper we discussed our approaches for solving the TID and TDR subtask part of the Temporalia-2 task. For the TID subtask, we used a rule-based voting method that is comprised of designed rules which use query features such as verb tense of the query, temporal expression identified from the query and the multinomial distribution of n-grams in the query. The evaluation results show that incorporating the linguistic and temporal features helps improve the estimation of the temporal intent of a query. Designing a rule, based on dictionary words related to future could help improve the estimation of queries that have a higher probability for future intent. For atemporal queries that have candidate years returned from the GTE service, rules which determine the spread of years across time is needed for disambiguation.
+
+In the TDR subtask, we jointly classified all the subtopics together to get unique subtopic-intent pairs. We then built separate learning to rank models for each temporal intent using features extracted from the document. The temporal relevance score helped improve the performance measures for future and past intents. The overall performance could be improved by mining the other indicative search questions for an intent, as well as using the named entity tags to improve content relevance and to determine important time expressions.
+
+The temporal diversification of results using earth mover's distance was an effective approach exploiting the temporal distribution of time references in the documents. However, this could be improved by experimenting with smaller candidate sets of relevant documents from each individual intent.
 \bibliographystyle{abbrv}
 
 \bibliography{ntcirsample}
-
 
 \end{document}
 
