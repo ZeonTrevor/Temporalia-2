@@ -85,7 +85,9 @@ For the TID subtask, we identify a set of query-specific features such as verb t
 In the TDR subtask, our approach is to first classify query subtopics to the correct temporal intent class with high accuracy using a joint classifier (Section \ref{subtopic_classify}). Using the classified subtopics in conjunction with the query topic, we produce a ranked list for each temporal intent class using retrieval models trained by a \textit{listwise} learning-to-rank approach. One of the key features we use is the temporal relevance of a document. Temporal relevance is a score that estimates the expected temporal distance of the document from the query hitting time using the distribution of temporal expressions in the content (refer Section \ref{temp_score}). Finally to produce a diversified list from the top-$k$ results for each class, we use a greedy approach that maximizes the earth mover's distance between the distribution of temporal references in the result set.
 
 %% needs to be fixed. add the right section labels. this is just a sample of how it should be written
-\textbf{Outline.} The rest of the paper is organized as follows. In Section \ref{TID} we describe the features extracted and the rule based voting approach for the TID subtask. Section \ref{TDR} describes how temporal relevance of a document is computed along with the various learning-to-rank features that are used for the TDR subtask. This section also describes the diversification of results across time. In Section \ref{setup} we discuss the experimental setup including the training procedure for the learning-to-rank models. Finally we discuss our performance in Section \ref{results} and highlight key takeaways in Section \ref{Conclusion}.
+\textbf{Outline.} The rest of the paper is organized as follows. In Section \ref{TID} we describe our approach for the TID subtask along with the discussion of the results detailed in Section \ref{sec:tid results}.
+% and in \ref{sec:tid rules} the intent specific rules for the TID subtask are explained. Then we discuss the results for the TID subtask in section \ref{sec:tid results}. 
+In Section \ref{TDR} we first describe our subtopic classification approach in \ref{subtopic_classify} and then explain how temporal relevance of a document is computed in \ref{temp_score}. We then highlight the features used for the learning-to-rank models in Section \ref{ltor_f}. Our diversification approach using earth mover's distance is the subject of Section \ref{diversification}. In Section \ref{setup} we discuss the experimental setup including the training procedure for the learning-to-rank models. Finally we discuss our performance in the TDR subtask in Section \ref{results} and highlight key takeaways in Section \ref{Conclusion}.
 
 
 
@@ -113,7 +115,7 @@ Each formal run query (\textit{q}) is represented as a set of all possible permu
 p(q,class) =\underset{i\in q}{\arg\max}\prod_{ng \in i}p(ng, class)
 \end{equation}
 \end{itemize}
-\subsection{Rule Based Voting Method}
+\subsection{Rule Based Voting Method}\label{sec:tid rules}
 We designed rules based on the dry run queries, which if satisfied contributes a vote to a particular temporal class. Once all the rules are applied, the votes are accumulated for each temporal class and a probability distribution across the temporal classes are built using these votes. We apply the rules in the same order as defined below.
 \begin{itemize}
 \item \textsf{NGram features} provides the probability of a query to a particular temporal class. We learn a model using a decision tree based on regression for the dry run queries with the NGram features. This learned model is then used to predict the probabilites for the formal run queries. The temporal class with the maximum probability output from the learned model gets a vote.
@@ -128,7 +130,7 @@ We submitted 2 runs for the TID subtask.
 \item \textsf{L3S-TID-E-1}: This run uses the \textsf{rule based voting method} to generate the probability distribution across the temporal classes for a given query.
 \item \textsf{L3S-TID-E-2}: This run uses the probability distribution across temporal classes for a query generated only from the \textsf{NGram features}.
 \end{itemize}
-\subsubsection{Results and Discussion}
+\subsubsection{Results and Discussion}\label{sec:tid results}
 \begin{table}[htbp]
 \centering
 \begin{tabular}{|c|c|c|}
